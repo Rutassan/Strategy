@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Прототип стратегии
+Comment=Запуск прототипа стратегии на C# и raylib
+Path=/home/rutasan/Strategy
+Exec=dotnet run --project /home/rutasan/Strategy/Strategy.csproj
+Terminal=false
+Categories=Game;StrategyGame;
