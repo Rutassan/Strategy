@@ -264,4 +264,24 @@ public sealed class WorldMapModelTests
     {
         Assert.Null(_model.GetCharacterById(-1));
     }
+
+    [Fact]
+    public void Можно_получить_стартовый_список_доступных_правителей()
+    {
+        IReadOnlyList<Character> rulers = _model.GetSelectableRulers(12);
+
+        Assert.Equal(12, rulers.Count);
+        Assert.All(rulers, ruler => Assert.Contains(_model.Provinces, province => province.OwnerCharacterId == ruler.Id));
+    }
+
+    [Fact]
+    public void Можно_получить_провинции_принадлежащие_персонажу()
+    {
+        Character ruler = _model.GetSelectableRulers(1).Single();
+        IReadOnlyList<Province> provinces = _model.GetOwnedProvinces(ruler.Id);
+
+        Assert.Single(provinces);
+        Assert.True(_model.IsProvinceOwnedByCharacter(provinces[0], ruler.Id));
+        Assert.False(_model.IsProvinceOwnedByCharacter(provinces[0], ruler.Id + 1));
+    }
 }

@@ -224,6 +224,29 @@ internal sealed class WorldMapModel
         return GetCharacterById(province.OwnerCharacterId);
     }
 
+    public IReadOnlyList<Character> GetSelectableRulers(int maxCount)
+    {
+        return Provinces
+            .Select(GetProvinceOwner)
+            .OfType<Character>()
+            .OrderBy(character => character.HouseName)
+            .ThenBy(character => character.FullName)
+            .Take(maxCount)
+            .ToArray();
+    }
+
+    public IReadOnlyList<Province> GetOwnedProvinces(int characterId)
+    {
+        return Provinces
+            .Where(province => province.OwnerCharacterId == characterId)
+            .ToArray();
+    }
+
+    public bool IsProvinceOwnedByCharacter(Province province, int characterId)
+    {
+        return province.OwnerCharacterId == characterId;
+    }
+
     public bool IsTileInside(int tileX, int tileY)
     {
         return tileX >= 0 && tileX < MapWidth && tileY >= 0 && tileY < MapHeight;

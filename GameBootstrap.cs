@@ -49,7 +49,7 @@ internal static class GameBootstrap
             " АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ" +
             "абвгдеёжзийклмнопрстуфхцчшщъыьэюя" +
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" +
-            "0123456789:./-x•()+";
+            "0123456789:./-x•()+,";
 
         return glyphs
             .Distinct()
@@ -63,13 +63,17 @@ internal sealed class WorldMapScene
 {
     private readonly WorldMapModel _model = new();
     private readonly Font _uiFont;
+    private readonly IReadOnlyList<Character> _selectableRulers;
     private Camera2D _camera;
     private Province? _selectedProvince;
     private Character? _selectedCharacter;
+    private Character? _playerCharacter;
+    private bool _isRulerSelectionOpen;
 
     public WorldMapScene(Font uiFont)
     {
         _uiFont = uiFont;
+        _selectableRulers = _model.GetSelectableRulers(12);
         _camera = new Camera2D
         {
             Target = _model.InitialCameraTarget,
@@ -127,12 +131,16 @@ internal sealed class WorldMapScene
     {
         Raylib.BeginMode2D(_camera);
         DrawTiles();
+        DrawPlayerOwnedProvinces();
         DrawProvinceSelection();
         DrawProvinceBorders();
         DrawMapFrame();
         Raylib.EndMode2D();
         DrawHud();
+        DrawChooseRulerButton();
+        DrawPlayerPanel();
         DrawProvincePanel();
+        DrawRulerSelectionPanel();
         DrawCharacterPanel();
     }
 
@@ -199,6 +207,68 @@ internal sealed class WorldMapScene
         Raylib.DrawTextEx(_uiFont, $"Камера: WASD СКМ колесо  {_camera.Zoom:0.00}x", new Vector2(32, 90), 20, 1, new Color(213, 231, 241, 255));
     }
 
+    private void DrawChooseRulerButton()
+    {
+        Rectangle buttonRect = GetChooseRulerButtonRect();
+        Color fillColor = _isRulerSelectionOpen ? new Color(90, 95, 62, 255) : new Color(70, 88, 106, 255);
+        Raylib.DrawRectangleRounded(buttonRect, 0.18f, 8, fillColor);
+        Raylib.DrawRectangleLinesEx(buttonRect, 2f, new Color(231, 220, 184, 255));
+        string label = _playerCharacter is null ? "Начать правление" : "Выбрать персонажа";
+        Raylib.DrawTextEx(_uiFont, label, new Vector2(buttonRect.X + 18, buttonRect.Y + 10), 22, 1, Color.RayWhite);
+    }
+
+    private void DrawPlayerPanel()
+    {
+        if (_playerCharacter is null)
+        {
+            return;
+        }
+
+        int panelX = 18;
+        int panelY = 186;
+        int panelWidth = 340;
+        int panelHeight = 102;
+
+        Raylib.DrawRectangle(panelX, panelY, panelWidth, panelHeight, new Color(17, 24, 31, 228));
+        Raylib.DrawRectangleLinesEx(new Rectangle(panelX, panelY, panelWidth, panelHeight), 3f, _playerCharacter.BannerColor);
+        Raylib.DrawRectangle(panelX + 20, panelY + 18, 56, 56, _playerCharacter.PortraitColor);
+        Raylib.DrawRectangleLines(panelX + 20, panelY + 18, 56, 56, Color.RayWhite);
+        Raylib.DrawTextEx(_uiFont, "Вы", new Vector2(panelX + 92, panelY + 14), 24, 1, Color.RayWhite);
+        Raylib.DrawTextEx(_uiFont, _playerCharacter.FullName, new Vector2(panelX + 92, panelY + 40), 18, 1, new Color(255, 235, 153, 255));
+        Raylib.DrawTextEx(_uiFont, _playerCharacter.HouseName, new Vector2(panelX + 92, panelY + 66), 18, 1, new Color(217, 233, 241, 255));
+    }
+
+    private void DrawPlayerOwnedProvinces()
+    {
+        if (_playerCharacter is null)
+        {
+            return;
+        }
+
+        Color ownedFillColor = new Color((int)_playerCharacter.BannerColor.R, (int)_playerCharacter.BannerColor.G, (int)_playerCharacter.BannerColor.B, 92);
+        Color ownedBorderColor = new Color(255, 245, 170, 255);
+
+        foreach (Province province in _model.GetOwnedProvinces(_playerCharacter.Id))
+        {
+            for (int y = province.StartTileY; y <= province.EndTileY; y++)
+            {
+                for (int x = province.StartTileX; x <= province.EndTileX; x++)
+                {
+                    Raylib.DrawRectangle(x * _model.TileSize, y * _model.TileSize, _model.TileSize, _model.TileSize, ownedFillColor);
+                }
+            }
+
+            Raylib.DrawRectangleLinesEx(
+                new Rectangle(
+                    province.StartTileX * _model.TileSize,
+                    province.StartTileY * _model.TileSize,
+                    province.WidthInTiles * _model.TileSize,
+                    province.HeightInTiles * _model.TileSize),
+                8f,
+                ownedBorderColor);
+        }
+    }
+
     private void DrawProvinceSelection()
     {
         if (_selectedProvince is null)
@@ -253,6 +323,11 @@ internal sealed class WorldMapScene
         Raylib.DrawTextEx(_uiFont, $"Династия: {owner?.HouseName ?? "Неизвестно"}", new Vector2(panelX + 22, panelY + 145), 18, 1, new Color(217, 233, 241, 255));
         Raylib.DrawTextEx(_uiFont, $"Территория: {terrainLabel}", new Vector2(panelX + 22, panelY + 170), 18, 1, new Color(217, 233, 241, 255));
         Raylib.DrawTextEx(_uiFont, $"Размер: {_selectedProvince.WidthInTiles}x{_selectedProvince.HeightInTiles} клетки", new Vector2(panelX + 22, panelY + 193), 18, 1, new Color(217, 233, 241, 255));
+
+        if (_playerCharacter is not null && _model.IsProvinceOwnedByCharacter(_selectedProvince, _playerCharacter.Id))
+        {
+            Raylib.DrawTextEx(_uiFont, "Ваше владение", new Vector2(panelX + 250, panelY + 18), 18, 1, new Color(161, 228, 139, 255));
+        }
     }
 
     private void DrawProvinceOwnerLine(float x, float y, Character? owner)
@@ -294,7 +369,7 @@ internal sealed class WorldMapScene
         DrawCharacterTraits(panelX + 560, panelY + 118, _selectedCharacter);
         DrawCharacterFamily(panelX + 300, panelY + 330, _selectedCharacter);
         DrawCharacterResources(panelX + 300, panelY + panelHeight - 120, _selectedCharacter);
-        DrawCharacterActions(panelX + 300, panelY + panelHeight - 70);
+        DrawCharacterActions(panelX + 300, panelY + panelHeight - 70, _selectedCharacter);
         DrawCloseButton(panelX + panelWidth - 52, panelY + 18);
     }
 
@@ -392,13 +467,76 @@ internal sealed class WorldMapScene
         Raylib.DrawTextEx(_uiFont, label, new Vector2(x + 24, y), 20, 1, Color.RayWhite);
     }
 
-    private void DrawCharacterActions(int x, int y)
+    private void DrawCharacterActions(int x, int y, Character character)
     {
+        bool isPlayerCharacter = _playerCharacter?.Id == character.Id;
+
+        if (isPlayerCharacter)
+        {
+            DrawActionButton(new Rectangle(x, y, 190, 38), "Найти супругу", false);
+            DrawActionButton(new Rectangle(x + 206, y, 190, 38), "Назначить советников", false);
+            DrawActionButton(new Rectangle(x + 412, y, 190, 38), "Воспитывать наследника", false);
+            DrawActionButton(new Rectangle(x + 618, y, 190, 38), "Управлять доменом", false);
+            DrawActionButton(new Rectangle(x + 824, y, 190, 38), "Открыть интриги", false);
+            return;
+        }
+
         DrawActionButton(new Rectangle(x, y, 190, 38), "Предложить брак", false);
         DrawActionButton(new Rectangle(x + 206, y, 190, 38), "Отправить подарок", false);
         DrawActionButton(new Rectangle(x + 412, y, 190, 38), "Предложить альянс", false);
         DrawActionButton(new Rectangle(x + 618, y, 190, 38), "Объявить войну", true);
         DrawActionButton(new Rectangle(x + 824, y, 190, 38), "Открыть интриги", false);
+    }
+
+    private void DrawRulerSelectionPanel()
+    {
+        if (!_isRulerSelectionOpen)
+        {
+            return;
+        }
+
+        int panelX = 250;
+        int panelY = 110;
+        int panelWidth = Raylib.GetScreenWidth() - 500;
+        int panelHeight = Raylib.GetScreenHeight() - 220;
+
+        Raylib.DrawRectangle(0, 0, Raylib.GetScreenWidth(), Raylib.GetScreenHeight(), new Color(6, 10, 14, 170));
+        Raylib.DrawRectangle(panelX, panelY, panelWidth, panelHeight, new Color(21, 28, 34, 246));
+        Raylib.DrawRectangleLinesEx(new Rectangle(panelX, panelY, panelWidth, panelHeight), 4f, new Color(236, 224, 186, 255));
+        Raylib.DrawTextEx(_uiFont, "Выбор стартового правителя", new Vector2(panelX + 26, panelY + 20), 30, 1, Color.RayWhite);
+        Raylib.DrawTextEx(_uiFont, "Клик по карточке открывает персонажа. Кнопка справа начинает правление.", new Vector2(panelX + 26, panelY + 56), 18, 1, new Color(217, 233, 241, 255));
+        DrawCloseButton(panelX + panelWidth - 52, panelY + 18);
+
+        foreach ((Character character, Rectangle cardRect, Rectangle buttonRect) in GetRulerCardRects())
+        {
+            DrawRulerCard(character, cardRect, buttonRect);
+        }
+    }
+
+    private void DrawRulerCard(Character character, Rectangle cardRect, Rectangle buttonRect)
+    {
+        Province? province = _model.GetOwnedProvinces(character.Id).FirstOrDefault();
+
+        Raylib.DrawRectangleRounded(cardRect, 0.08f, 8, new Color(35, 46, 56, 255));
+        Raylib.DrawRectangleLinesEx(cardRect, 2f, character.BannerColor);
+        Raylib.DrawRectangle((int)cardRect.X + 16, (int)cardRect.Y + 14, 56, 56, character.PortraitColor);
+        Raylib.DrawRectangleLines((int)cardRect.X + 16, (int)cardRect.Y + 14, 56, 56, Color.RayWhite);
+
+        Raylib.DrawTextEx(_uiFont, character.FullName, new Vector2(cardRect.X + 88, cardRect.Y + 12), 20, 1, Color.RayWhite);
+        Raylib.DrawTextEx(_uiFont, $"Дом {character.HouseName}", new Vector2(cardRect.X + 88, cardRect.Y + 38), 17, 1, new Color(235, 217, 158, 255));
+        Raylib.DrawTextEx(_uiFont, $"{character.Age} лет • {character.Gender}", new Vector2(cardRect.X + 88, cardRect.Y + 60), 16, 1, new Color(217, 233, 241, 255));
+
+        string traitsPreview = string.Join(", ", character.Traits.Take(3));
+        Raylib.DrawTextEx(_uiFont, traitsPreview, new Vector2(cardRect.X + 16, cardRect.Y + 86), 16, 1, new Color(166, 210, 160, 255));
+
+        if (province is not null)
+        {
+            Raylib.DrawRectangle((int)cardRect.X + 16, (int)cardRect.Y + 112, 18, 18, _model.GetTileColor(province.TerrainType, province.StartTileX, province.StartTileY));
+            Raylib.DrawRectangleLines((int)cardRect.X + 16, (int)cardRect.Y + 112, 18, 18, Color.RayWhite);
+            Raylib.DrawTextEx(_uiFont, province.CountyName, new Vector2(cardRect.X + 44, cardRect.Y + 109), 16, 1, new Color(217, 233, 241, 255));
+        }
+
+        DrawActionButton(buttonRect, "Играть за него", false);
     }
 
     private void DrawActionButton(Rectangle rectangle, string label, bool disabled)
@@ -434,6 +572,44 @@ internal sealed class WorldMapScene
             }
         }
 
+        if (_isRulerSelectionOpen)
+        {
+            if (IsRulerSelectionCloseClicked(mousePosition))
+            {
+                _isRulerSelectionOpen = false;
+                return;
+            }
+
+            Character? chosenRuler = GetChosenRulerAtMouse(mousePosition);
+            if (chosenRuler is not null)
+            {
+                _playerCharacter = chosenRuler;
+                _selectedCharacter = chosenRuler;
+                _selectedProvince = _model.GetOwnedProvinces(chosenRuler.Id).FirstOrDefault();
+                _isRulerSelectionOpen = false;
+                return;
+            }
+
+            Character? previewRuler = GetPreviewRulerAtMouse(mousePosition);
+            if (previewRuler is not null)
+            {
+                _selectedCharacter = previewRuler;
+                return;
+            }
+        }
+
+        if (Raylib.CheckCollisionPointRec(mousePosition, GetChooseRulerButtonRect()))
+        {
+            _isRulerSelectionOpen = !_isRulerSelectionOpen;
+            return;
+        }
+
+        if (_playerCharacter is not null && Raylib.CheckCollisionPointRec(mousePosition, GetPlayerPanelRect()))
+        {
+            _selectedCharacter = _playerCharacter;
+            return;
+        }
+
         Character? ownerFromProvincePanel = GetProvinceOwnerAtMouse(mousePosition);
         if (ownerFromProvincePanel is not null)
         {
@@ -460,6 +636,53 @@ internal sealed class WorldMapScene
 
         Rectangle ownerRect = GetProvinceOwnerClickableRect(owner);
         return Raylib.CheckCollisionPointRec(mousePosition, ownerRect) ? owner : null;
+    }
+
+    private Character? GetChosenRulerAtMouse(Vector2 mousePosition)
+    {
+        foreach ((Character character, _, Rectangle buttonRect) in GetRulerCardRects())
+        {
+            if (Raylib.CheckCollisionPointRec(mousePosition, buttonRect))
+            {
+                return character;
+            }
+        }
+
+        return null;
+    }
+
+    private Character? GetPreviewRulerAtMouse(Vector2 mousePosition)
+    {
+        foreach ((Character character, Rectangle cardRect, Rectangle buttonRect) in GetRulerCardRects())
+        {
+            if (Raylib.CheckCollisionPointRec(mousePosition, cardRect) && !Raylib.CheckCollisionPointRec(mousePosition, buttonRect))
+            {
+                return character;
+            }
+        }
+
+        return null;
+    }
+
+    private IEnumerable<(Character Character, Rectangle CardRect, Rectangle ButtonRect)> GetRulerCardRects()
+    {
+        int panelX = 250;
+        int panelY = 110;
+        int columnWidth = 520;
+        int rowHeight = 160;
+        int gapX = 28;
+        int gapY = 18;
+
+        for (int index = 0; index < _selectableRulers.Count; index++)
+        {
+            int column = index % 2;
+            int row = index / 2;
+            int x = panelX + 26 + column * (columnWidth + gapX);
+            int y = panelY + 100 + row * (rowHeight + gapY);
+            Rectangle cardRect = new(x, y, columnWidth, rowHeight);
+            Rectangle buttonRect = new(x + columnWidth - 176, y + 110, 160, 36);
+            yield return (_selectableRulers[index], cardRect, buttonRect);
+        }
     }
 
     private Rectangle GetProvinceOwnerClickableRect(Character owner)
@@ -538,6 +761,14 @@ internal sealed class WorldMapScene
         return Raylib.CheckCollisionPointRec(mousePosition, closeRect);
     }
 
+    private bool IsRulerSelectionCloseClicked(Vector2 mousePosition)
+    {
+        int panelX = 250;
+        int panelWidth = Raylib.GetScreenWidth() - 500;
+        Rectangle closeRect = new(panelX + panelWidth - 52, 128, 28, 28);
+        return Raylib.CheckCollisionPointRec(mousePosition, closeRect);
+    }
+
     private string GetFamilyLabel(int? characterId, string maleLabel, string femaleLabel, string fallbackLabel)
     {
         if (characterId is null)
@@ -569,5 +800,15 @@ internal sealed class WorldMapScene
         }
 
         return axis;
+    }
+
+    private static Rectangle GetChooseRulerButtonRect()
+    {
+        return new Rectangle(18, 304, 340, 48);
+    }
+
+    private static Rectangle GetPlayerPanelRect()
+    {
+        return new Rectangle(18, 186, 340, 102);
     }
 }
