@@ -1,0 +1,25 @@
+# Build output
+bin/
+obj/
+Strategy.Tests/bin/
+Strategy.Tests/obj/
+
+# Test and coverage artifacts
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# IDE / local user files
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Local Codex metadata
+.codex

@@ -11,12 +11,13 @@ internal static class GameBootstrap
 
     public static void Run()
     {
-        const int screenWidth = 1600;
-        const int screenHeight = 900;
+        const int screenWidth = 1920;
+        const int screenHeight = 1080;
 
-        Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.Msaa4xHint | ConfigFlags.VSyncHint);
-        Raylib.InitWindow(screenWidth, screenHeight, "Прототип стратегии");
+        Raylib.SetConfigFlags(ConfigFlags.FullscreenMode | ConfigFlags.Msaa4xHint | ConfigFlags.VSyncHint);
+        Raylib.InitWindow(screenWidth, screenHeight, "AI Strategy");
         Raylib.SetTargetFPS(144);
+        Raylib.SetExitKey(KeyboardKey.Null);
 
         int[] codepoints = BuildUiCodepoints();
         Font uiFont = Raylib.LoadFontEx(UiFontPath, 32, codepoints, codepoints.Length);
@@ -24,6 +25,11 @@ internal static class GameBootstrap
 
         while (!Raylib.WindowShouldClose())
         {
+            if (Raylib.IsKeyPressed(KeyboardKey.F11))
+            {
+                Raylib.ToggleFullscreen();
+            }
+
             float deltaTime = Raylib.GetFrameTime();
             scene.Update(deltaTime);
 
@@ -188,7 +194,7 @@ internal sealed class WorldMapScene
     private void DrawHud()
     {
         Raylib.DrawRectangle(18, 18, 330, 104, new Color(10, 22, 30, 205));
-        Raylib.DrawTextEx(_uiFont, "Прототип карты мира", new Vector2(32, 30), 28, 1, Color.RayWhite);
+        Raylib.DrawTextEx(_uiFont, "AIS", new Vector2(32, 30), 28, 1, Color.RayWhite);
         Raylib.DrawTextEx(_uiFont, "ЛКМ: выбрать провинцию", new Vector2(32, 66), 20, 1, new Color(213, 231, 241, 255));
         Raylib.DrawTextEx(_uiFont, $"Камера: WASD СКМ колесо  {_camera.Zoom:0.00}x", new Vector2(32, 90), 20, 1, new Color(213, 231, 241, 255));
     }
@@ -344,11 +350,11 @@ internal sealed class WorldMapScene
     {
         Raylib.DrawTextEx(_uiFont, "Семья", new Vector2(x, y), 24, 1, Color.RayWhite);
 
-        DrawFamilyLine("Супруга", character.SpouseId, x, y + 36);
-        DrawFamilyLine("Родители", character.ParentIds.FirstOrDefault(), x, y + 68);
-        DrawFamilyLine(string.Empty, character.ParentIds.Skip(1).FirstOrDefault(), x + 118, y + 68);
-        DrawFamilyLine("Дети", character.ChildIds.FirstOrDefault(), x, y + 100);
-        DrawFamilyLine(string.Empty, character.ChildIds.Skip(1).FirstOrDefault(), x + 118, y + 100);
+        DrawFamilyLine(GetFamilyLabel(character.SpouseId, "Муж", "Жена", "Супруг"), character.SpouseId, x, y + 36);
+        DrawFamilyLine(GetFamilyLabel(character.ParentIds.ElementAtOrDefault(0), "Отец", "Мать", "Родитель"), character.ParentIds.ElementAtOrDefault(0), x, y + 72);
+        DrawFamilyLine(GetFamilyLabel(character.ParentIds.ElementAtOrDefault(1), "Отец", "Мать", "Родитель"), character.ParentIds.ElementAtOrDefault(1), x, y + 104);
+        DrawFamilyLine(GetFamilyLabel(character.ChildIds.ElementAtOrDefault(0), "Сын", "Дочь", "Ребёнок"), character.ChildIds.ElementAtOrDefault(0), x, y + 140);
+        DrawFamilyLine(GetFamilyLabel(character.ChildIds.ElementAtOrDefault(1), "Сын", "Дочь", "Ребёнок"), character.ChildIds.ElementAtOrDefault(1), x, y + 172);
     }
 
     private void DrawFamilyLine(string label, int? characterId, int x, int y)
@@ -499,10 +505,10 @@ internal sealed class WorldMapScene
         return new[]
         {
             CreateFamilyRect(character.SpouseId, x + 96, y + 36),
-            CreateFamilyRect(character.ParentIds.ElementAtOrDefault(0), x + 96, y + 68),
-            CreateFamilyRect(character.ParentIds.ElementAtOrDefault(1), x + 118, y + 68),
-            CreateFamilyRect(character.ChildIds.ElementAtOrDefault(0), x + 96, y + 100),
-            CreateFamilyRect(character.ChildIds.ElementAtOrDefault(1), x + 118, y + 100)
+            CreateFamilyRect(character.ParentIds.ElementAtOrDefault(0), x + 116, y + 72),
+            CreateFamilyRect(character.ParentIds.ElementAtOrDefault(1), x + 116, y + 104),
+            CreateFamilyRect(character.ChildIds.ElementAtOrDefault(0), x + 108, y + 140),
+            CreateFamilyRect(character.ChildIds.ElementAtOrDefault(1), x + 108, y + 172)
         };
     }
 
@@ -530,6 +536,22 @@ internal sealed class WorldMapScene
         int panelWidth = screenWidth - 140;
         Rectangle closeRect = new(panelX + panelWidth - 52, 88, 28, 28);
         return Raylib.CheckCollisionPointRec(mousePosition, closeRect);
+    }
+
+    private string GetFamilyLabel(int? characterId, string maleLabel, string femaleLabel, string fallbackLabel)
+    {
+        if (characterId is null)
+        {
+            return fallbackLabel;
+        }
+
+        Character? familyMember = _model.GetCharacterById(characterId.Value);
+        if (familyMember is null)
+        {
+            return fallbackLabel;
+        }
+
+        return familyMember.Gender == "Женщина" ? femaleLabel : maleLabel;
     }
 
     private static float GetAxis(KeyboardKey negativeMain, KeyboardKey negativeAlt, KeyboardKey positiveMain, KeyboardKey positiveAlt)
